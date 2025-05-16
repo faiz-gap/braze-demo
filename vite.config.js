@@ -12,8 +12,7 @@ export default defineConfig({
       }
     }
   },
-  // Add this to handle CommonJS modules properly
   optimizeDeps: {
-    exclude: ['app.js']
+    exclude: ['@braze/web-sdk'] // Add this line
   }
 })

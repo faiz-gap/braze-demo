@@ -1,39 +1,7 @@
-// braze-service.js - CDN Version with Enhanced Debugging (for Braze SDK v5.x)
-// This module wraps the global braze object from the CDN
+// src/services/braze-service.js
+import * as braze from '@braze/web-sdk';
 
-console.debug('[BrazeService] Module loaded. Waiting for Braze SDK from CDN snippet.');
-
-const waitForBraze = () => {
-    console.debug('[BrazeService-waitForBraze] Starting to wait for window.braze.initialize.');
-    return new Promise((resolve, reject) => {
-        // The snippet creates window.braze and window.brazeQueue immediately.
-        // We need to wait for the actual SDK to load and define window.braze.initialize.
-        if (typeof window.braze !== 'undefined' && typeof window.braze.initialize === 'function') {
-            console.debug('[BrazeService-waitForBraze] window.braze.initialize found immediately.');
-            resolve();
-        } else {
-            let attempts = 0;
-            const maxAttempts = 100; // Wait up to 10 seconds (increased a bit)
-            const interval = 100; // ms
-            console.debug(`[BrazeService-waitForBraze] window.braze.initialize not found. Checking every ${interval}ms for up to ${maxAttempts * interval / 1000}s.`);
-
-            const checkInterval = setInterval(() => {
-                attempts++;
-                if (typeof window.braze !== 'undefined' && typeof window.braze.initialize === 'function') {
-                    clearInterval(checkInterval);
-                    console.debug(`[BrazeService-waitForBraze] window.braze.initialize found after ${attempts} attempts.`);
-                    resolve();
-                } else if (attempts >= maxAttempts) {
-                    clearInterval(checkInterval);
-                    console.error('[BrazeService-waitForBraze] Braze SDK (window.braze.initialize) failed to load after 10 seconds.');
-                    reject(new Error('Braze SDK (window.braze.initialize) failed to load after 10 seconds.'));
-                } else if (attempts % 20 === 0) { // Log every 2 seconds to reduce noise
-                    console.debug(`[BrazeService-waitForBraze] Still waiting for window.braze.initialize (attempt ${attempts}/${maxAttempts}). Is window.braze defined? ${typeof window.braze !== 'undefined'}`);
-                }
-            }, interval);
-        }
-    });
-};
+console.debug('[BrazeService] Module loaded. Using @braze/web-sdk package.');
 
 const BrazeService = {
     apiKey: null,
@@ -49,11 +17,9 @@ const BrazeService = {
                 let errorData;
                 try {
                     errorData = await response.json();
-                    console.debug('[BrazeService-_fetchConfig] Error response JSON:', errorData);
                 } catch (e) {
-                    console.debug('[BrazeService-_fetchConfig] Could not parse error response as JSON.');
-                    const textError = await response.text(); // Get text for non-JSON errors
-                    errorData = { error: `Non-JSON error response: ${textError}` }; // Store it
+                    const textError = await response.text();
+                    errorData = { error: `Non-JSON error response: ${textError}` };
                 }
                 throw new Error(errorData.error || `Failed to fetch Braze config: ${response.status}`);
             }
@@ -61,7 +27,7 @@ const BrazeService = {
             console.debug('[BrazeService-_fetchConfig] Raw config received:', config);
             if (config.success) {
                 this.apiKey = config.apiKey;
-                this.sdkEndpoint = config.sdkEndpoint; // e.g., sdk.fra-01.braze.eu
+                this.sdkEndpoint = config.sdkEndpoint;
                 console.log(`[BrazeService-_fetchConfig] Braze config fetched successfully. API Key: ${this.apiKey ? 'SET' : 'NOT SET'}, SDK Endpoint: ${this.sdkEndpoint}`);
             } else {
                 throw new Error(config.error || "Failed to retrieve Braze config from server.");
@@ -70,77 +36,57 @@ const BrazeService = {
             console.error('[BrazeService-_fetchConfig] Error fetching Braze config:', error.message);
             this.apiKey = null;
             this.sdkEndpoint = null;
+            throw error;
         }
     },
 
     async initialize() {
-        console.debug('[BrazeService-initialize] Starting initialization.');
+        console.debug('[BrazeService-initialize] Starting initialization with @braze/web-sdk package.');
         if (this.isInitialized) {
             console.log("[BrazeService-initialize] Braze already initialized. Skipping.");
             return true;
         }
 
         try {
-            await waitForBraze();
+            await this._fetchConfig();
         } catch (error) {
-            console.error('[BrazeService-initialize] Failed waiting for Braze SDK:', error.message);
+            console.error('[BrazeService-initialize] Failed to fetch config, cannot initialize Braze.', error.message);
             this.isInitialized = false;
             return false;
         }
-
-        if (!window.braze || typeof window.braze.initialize !== 'function') {
-            console.error('[BrazeService-initialize] window.braze or window.braze.initialize is not available after waiting. Cannot initialize.');
-            this.isInitialized = false;
-            return false;
-        }
-        console.debug('[BrazeService-initialize] window.braze.initialize function is available.');
-
-        await this._fetchConfig();
 
         if (this.apiKey && this.sdkEndpoint) {
-            console.debug(`[BrazeService-initialize] API Key and SDK Endpoint are available. Proceeding with Braze SDK initialization.`);
-            console.debug(`[BrazeService-initialize] Using API Key (first 5 chars): ${this.apiKey.substring(0, 5)}...`);
-            console.debug(`[BrazeService-initialize] Using SDK Endpoint (baseUrl): ${this.sdkEndpoint}`);
-
-            let cleanSdkEndpoint = this.sdkEndpoint.replace(/^https?:\/\//, '');
-            if (cleanSdkEndpoint !== this.sdkEndpoint) {
-                console.warn(`[BrazeService-initialize] Original sdkEndpoint "${this.sdkEndpoint}" was cleaned to "${cleanSdkEndpoint}" for Braze baseUrl.`);
-            }
-
+            console.debug(`[BrazeService-initialize] API Key and SDK Endpoint are available.`);
             const brazeOptions = {
-                baseUrl: cleanSdkEndpoint,
+                baseUrl: this.sdkEndpoint,
                 enableLogging: true,
-                // allowUserSuppliedHtml: true, // REMOVED - Deprecated in SDK v4.0.0 (current is v5.x)
-                // serviceWorkerLocation: '/service-worker.js' // Example: if you host a custom SW
             };
-            console.debug('[BrazeService-initialize] Options for window.braze.initialize:', JSON.stringify(brazeOptions));
+            console.debug('[BrazeService-initialize] Options for braze.initialize:', JSON.stringify(brazeOptions));
 
             try {
-                window.braze.initialize(this.apiKey, brazeOptions);
-                console.log('[BrazeService-initialize] window.braze.initialize called.');
+                braze.initialize(this.apiKey, brazeOptions);
+                console.log('[BrazeService-initialize] braze.initialize called.');
 
-                window.braze.openSession();
-                console.log('[BrazeService-initialize] window.braze.openSession called.');
+                // According to docs, subscribe *before* openSession for initial fetch
+                // However, we do this in DashboardPage to manage state and unsubscription.
+                // openSession will trigger an initial fetch if a subscription exists.
 
-                this.isInitialized = true; 
-                console.log('Braze SDK Initialized by BrazeService.');
+                braze.openSession();
+                console.log('[BrazeService-initialize] braze.openSession called.');
+                
+                this.isInitialized = true;
+                console.log('Braze SDK Initialized by BrazeService using @braze/web-sdk.');
 
                 setTimeout(() => {
-                    if (window.braze && typeof window.braze.getUser === 'function') {
-                        const user = window.braze.getUser();
-                        if (user && typeof user.getUserId === 'function') {
-                             console.debug(`[BrazeService-initialize] Current Braze User ID after init and short delay: ${user.getUserId()}`);
-                        } else {
-                             console.warn('[BrazeService-initialize] user.getUserId() not available after init and short delay.');
-                        }
-                    } else {
-                         console.warn('[BrazeService-initialize] window.braze.getUser() not available after init and short delay.');
+                    const user = braze.getUser();
+                    if (user && typeof user.getUserId === 'function') {
+                         console.debug(`[BrazeService-initialize] Current Braze User ID after init: ${user.getUserId()}`);
                     }
                 }, 500);
 
                 return true;
             } catch (error) {
-                console.error('[BrazeService-initialize] Error during window.braze.initialize or openSession:', error);
+                console.error('[BrazeService-initialize] Error during braze.initialize or openSession:', error);
                 this.isInitialized = false;
                 return false;
             }
@@ -152,100 +98,155 @@ const BrazeService = {
     },
 
     changeUser(userId, attributes = {}) {
-        console.debug(`[BrazeService-changeUser] Attempting to change user to ID: ${userId} with attributes:`, JSON.stringify(attributes));
+        console.debug(`[BrazeService-changeUser] User: ${userId}, Attrs:`, attributes);
         if (!this.isInitialized) {
-            console.warn("[BrazeService-changeUser] Braze not initialized. Call BrazeService.initialize() first. User not changed.");
+            console.warn("[BrazeService-changeUser] Braze not initialized.");
             return;
         }
         if (!userId) {
-            console.warn("[BrazeService-changeUser] userId is required. User not changed.");
+            console.warn("[BrazeService-changeUser] userId is required.");
             return;
         }
-
         try {
-            const brazeUser = window.braze.getUser(); 
-            if (!brazeUser || typeof brazeUser.getUserId !== 'function') {
-                console.error("[BrazeService-changeUser] window.braze.getUser() or getUserId not available. Cannot change user.");
+            braze.changeUser(userId);
+            const userToModify = braze.getUser();
+            if (!userToModify) {
+                console.error("[BrazeService-changeUser] braze.getUser() returned null after changeUser.");
                 return;
             }
-            
-            console.debug(`[BrazeService-changeUser] Calling window.braze.changeUser('${userId}')`);
-            window.braze.changeUser(userId); 
-
-            const userToModify = window.braze.getUser(); 
-
             for (const key in attributes) {
                 if (Object.prototype.hasOwnProperty.call(attributes, key)) {
                     const value = attributes[key];
-                    switch (key.toLowerCase()) { 
-                        case 'firstname':
-                        case 'first_name':
-                            userToModify.setFirstName(value);
-                            console.debug(`[BrazeService-changeUser] setFirstName('${value}') called.`);
-                            break;
-                        case 'lastname':
-                        case 'last_name':
-                            userToModify.setLastName(value);
-                            console.debug(`[BrazeService-changeUser] setLastName('${value}') called.`);
-                            break;
-                        case 'email':
-                            userToModify.setEmail(value);
-                            console.debug(`[BrazeService-changeUser] setEmail('${value}') called.`);
-                            break;
-                        default:
-                            userToModify.setCustomUserAttribute(key, value);
-                            console.debug(`[BrazeService-changeUser] setCustomUserAttribute('${key}', '${value}') called.`);
-                            break;
+                    if (value === null || typeof value === 'undefined') continue;
+                    switch (key.toLowerCase()) {
+                        case 'firstname': case 'first_name': userToModify.setFirstName(value); break;
+                        case 'lastname': case 'last_name': userToModify.setLastName(value); break;
+                        case 'email': userToModify.setEmail(value); break;
+                        default: userToModify.setCustomUserAttribute(key, value); break;
                     }
                 }
             }
-
-            console.log('[BrazeService-changeUser] User change and attribute setting calls queued.');
-            setTimeout(() => {
-                if (window.braze && window.braze.getUser()) {
-                    console.debug(`[BrazeService-changeUser] Braze User ID after ~500ms: ${window.braze.getUser().getUserId()}`);
-                }
-            }, 500);
-
+            console.log('[BrazeService-changeUser] User change and attributes queued.');
         } catch (error) {
-            console.error('[BrazeService-changeUser] Error in changeUser:', error);
+            console.error('[BrazeService-changeUser] Error:', error);
         }
     },
 
     logCustomEvent(eventName, eventProperties = {}) {
-        console.debug(`[BrazeService-logCustomEvent] Attempting to log event: '${eventName}' with properties:`, JSON.stringify(eventProperties));
-        if (!this.isInitialized) {
-            console.warn("[BrazeService-logCustomEvent] Braze not initialized. Event not logged.");
-            return;
-        }
-        if (!eventName) {
-            console.warn("[BrazeService-logCustomEvent] eventName is required. Event not logged.");
+        if (!this.isInitialized || !eventName) {
+            console.warn("[BrazeService-logCustomEvent] Not initialized or eventName missing.");
             return;
         }
         try {
-            window.braze.logCustomEvent(eventName, eventProperties); 
-            console.log(`[BrazeService-logCustomEvent] Custom event '${eventName}' logging call queued.`);
+            braze.logCustomEvent(eventName, eventProperties);
+            console.log(`[BrazeService-logCustomEvent] Event '${eventName}' queued.`);
         } catch (error) {
-            console.error('[BrazeService-logCustomEvent] Error logging custom event:', error);
+            console.error('[BrazeService-logCustomEvent] Error:', error);
         }
     },
 
     logOutUser() {
-        console.debug('[BrazeService-logOutUser] Attempting to log out user from Braze.');
         if (!this.isInitialized) {
-            console.warn("[BrazeService-logOutUser] Braze not initialized. Cannot log out Braze user.");
+            console.warn("[BrazeService-logOutUser] Braze not initialized.");
             return;
         }
         try {
-            window.braze.logOut(); 
-            console.log('[BrazeService-logOutUser] User logout call queued.');
-            setTimeout(() => {
-                 if (window.braze && window.braze.getUser()) {
-                    console.debug(`[BrazeService-logOutUser] Braze User ID after logout call and ~500ms: ${window.braze.getUser().getUserId()}`);
-                }
-            }, 500);
+            // The `@braze/web-sdk` typings and common practice suggest `braze.request डाटाFlush()` followed by
+            // app-level logic to clear user state. An explicit `braze.logOut()` is not consistently documented for web SDK v4+.
+            // `braze.wipeData()` is more for GDPR/data deletion and logs out the user.
+            // For a simple logout, changing to an anonymous user or just clearing local state is often enough.
+            // Let's try to see if wipeData is what we want for a "full" logout from Braze's perspective.
+            // If wipeData is too destructive (e.g., you want to retain anonymous tracking),
+            // then you would simply clear your app's local session and on next login, `changeUser` again.
+            if (typeof braze.wipeData === 'function') {
+                console.log('[BrazeService-logOutUser] Calling braze.wipeData() for logout.');
+                braze.wipeData(); // This will effectively log the user out and clear Braze data for them.
+            } else if (typeof braze.logOut === 'function') { // Check if logOut exists after all
+                console.log('[BrazeService-logOutUser] Calling braze.logOut().');
+                braze.logOut();
+            }
+            else {
+                 console.warn('[BrazeService-logOutUser] Neither braze.wipeData() nor braze.logOut() found. Logout on Braze might not be fully complete. App should clear local session.');
+            }
+            // braze.requestImmediateDataFlush(); // Good to call to send pending events
         } catch (error) {
-            console.error('[BrazeService-logOutUser] Error logging out Braze user:', error);
+            console.error('[BrazeService-logOutUser] Error:', error);
+        }
+    },
+
+    subscribeToContentCardsUpdates(callback) {
+        if (!this.isInitialized) {
+            console.warn("[BrazeService-subscribeToContentCardsUpdates] Braze not initialized.");
+            return () => {}; 
+        }
+        try {
+            return braze.subscribeToContentCardsUpdates(callback);
+        } catch (error) {
+            console.error('[BrazeService-subscribeToContentCardsUpdates] Error:', error);
+            return () => {};
+        }
+    },
+
+    requestContentCardsRefresh() {
+        if (!this.isInitialized) {
+            console.warn("[BrazeService-requestContentCardsRefresh] Braze not initialized.");
+            return;
+        }
+        try {
+            braze.requestContentCardsRefresh();
+            console.log('[BrazeService] Requested Content Cards refresh.');
+        } catch (error) {
+            console.error('[BrazeService-requestContentCardsRefresh] Error:', error);
+        }
+    },
+    
+    logContentCardImpression(cardObject) { // Takes a single card object
+        if (!this.isInitialized || !cardObject || !cardObject.id) {
+            console.warn("[BrazeService-logContentCardImpression] Not initialized or card/card.id missing.", cardObject);
+            return;
+        }
+        try {
+            // Documentation indicates logContentCardImpressions (plural) takes an array.
+            // If logging a single impression, wrap the card in an array.
+            if (typeof braze.logContentCardImpressions === 'function') { // Note the 's'
+                braze.logContentCardImpressions([cardObject]);
+                console.log(`[BrazeService] Logged impression for Card ID: ${cardObject.id}`);
+            } else {
+                console.warn("[BrazeService-logContentCardImpression] braze.logContentCardImpressions is not a function.");
+            }
+        } catch (error) {
+            console.error('[BrazeService-logContentCardImpression] Error:', error);
+        }
+    },
+
+    logContentCardClick(cardObject) { // Takes a single card object
+        if (!this.isInitialized || !cardObject || !cardObject.id) {
+             console.warn("[BrazeService-logContentCardClick] Not initialized or card/card.id missing.", cardObject);
+            return;
+        }
+        try {
+            if (typeof braze.logContentCardClick === 'function') {
+                braze.logContentCardClick(cardObject); // This seems correct as per your docs
+                console.log(`[BrazeService] Logged click for Card ID: ${cardObject.id}`);
+            } else {
+                console.warn("[BrazeService-logContentCardClick] braze.logContentCardClick is not a function.");
+            }
+        } catch (error) {
+            console.error('[BrazeService-logContentCardClick] Error:', error);
+        }
+    },
+
+    getCachedContentCards() {
+        if (!this.isInitialized) {
+            console.warn("[BrazeService-getCachedContentCards] Braze not initialized.");
+            return { cards: [] }; // Return an empty array structure
+        }
+        try {
+            const result = braze.getCachedContentCards();
+            return result || { cards: [] }; // Ensure it returns an object with a cards array
+        } catch (error) {
+            console.error('[BrazeService-getCachedContentCards] Error:', error);
+            return { cards: [] };
         }
     }
 };

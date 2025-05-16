@@ -1,3 +1,4 @@
+// src/components/dashboard/WelcomeBanner.jsx
 import React from 'react';
 
 const PlusIcon = () => <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 20 20"><path d="M10 5v10m-5-5h10" strokeLinejoin="round" strokeLinecap="round"/></svg>;
@@ -7,8 +8,10 @@ const WelcomeBanner = ({ userName, userInitials }) => {
     <div className="bg-gradient-to-r from-banner-gradient-from to-banner-gradient-to text-white 
                     flex flex-col md:flex-row items-center justify-between 
                     py-5 px-6 md:py-0 md:h-32
-                    -mx-4 sm:-mx-6 lg:-mx-8 mb-8 
-                    w-[calc(100%+2rem)] sm:w-[calc(100%+3rem)] lg:w-[calc(100%+4rem)] 
+                    -mt-4 sm:-mt-6 lg:-mt-8 /* Pulls it up against main content padding */
+                    -mx-4 sm:-mx-6 lg:-mx-8 /* For full bleed */
+                    mb-8 /* Space below the banner */
+                    w-[calc(100%+2rem)] sm:w-[calc(100%+3rem)] lg:w-[calc(100%+4rem)] /* For full bleed */
                     shadow-md relative z-[5]">
       <div className="text-center md:text-left mb-4 md:mb-0 flex-1">
         <h1 className="text-2xl md:text-[28px] font-light">

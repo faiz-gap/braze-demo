@@ -1,7 +1,7 @@
 import React, { useState, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
 import BrazeService from '../../services/braze-service';
-import { AuthContext } from '../../../App';
+import { AuthContext } from '../../App';
 
 
 const API_URL = '/api';

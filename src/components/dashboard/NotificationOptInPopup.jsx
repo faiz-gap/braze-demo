@@ -1,3 +1,4 @@
+// src/components/dashboard/NotificationOptInPopup.jsx
 import React, { useEffect, useRef } from 'react';
 
 const NotificationOptInPopup = ({ isVisible, onClose, onSignUp, onAskLater }) => {
@@ -5,15 +6,11 @@ const NotificationOptInPopup = ({ isVisible, onClose, onSignUp, onAskLater }) =>
 
   useEffect(() => {
     if (!isVisible) return;
-
     const handleClickOutside = (event) => {
-      if (popupRef.current && !popupRef.current.contains(event.target)) {
-        // Check if click is on bell icon; if so, parent handles toggle
-        const bellIcon = document.getElementById('notificationBellIcon'); // Assuming this ID exists
-        if (bellIcon && bellIcon.contains(event.target)) {
-          return;
-        }
-        onClose(); // Otherwise, close if click is outside popup
+      const bellButton = document.getElementById('notificationBellIcon');
+      if (popupRef.current && !popupRef.current.contains(event.target) &&
+          (!bellButton || !bellButton.contains(event.target))) {
+        onClose();
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -24,25 +21,39 @@ const NotificationOptInPopup = ({ isVisible, onClose, onSignUp, onAskLater }) =>
 
   return (
     <div
-        ref={popupRef}
-        // Mobile: Fixed, centered, slightly offset from top
-        // MD and up: Absolute, positioned relative to bell icon (this needs parent to be relative)
-        // The positioning logic from original CSS is complex for pure Tailwind.
-        // This version simplifies for fixed on mobile, absolute on desktop near where bell would be.
-        // Header needs to be `relative` for the `md:absolute` to work as intended IF this popup is INSIDE the header.
-        // If it's a global popup in DashboardPage, then positioning is relative to DashboardPage.
-        className={`
-            bg-white border border-brand-gray-dark rounded-lg shadow-native-popup 
-            w-[330px] max-w-[calc(100vw-40px)] text-left transform transition-all duration-150 ease-out
-            fixed top-16 left-1/2 -translate-x-1/2 z-50 
-            md:absolute md:top-full md:right-[-20px] md:left-auto md:translate-x-0 md:mt-3 md:origin-top-right
-            ${isVisible ? 'opacity-100 translate-y-0 scale-100' : 'opacity-0 -translate-y-2 scale-95 pointer-events-none'}
-        `}
-        // Add 'data-testid="notification-popup"' for easier testing
+      ref={popupRef}
+      style={{
+        position: 'absolute',
+        top: 'calc(100% + 10px)',
+        right: '-29px', // Fixed position based on screenshot
+        width: '330px',
+        maxWidth: 'calc(100vw - 40px)',
+        backgroundColor: 'white',
+        borderRadius: '0.5rem',
+        boxShadow: '0 6px 16px rgba(0, 0, 0, 0.12)',
+        border: '1px solid #e0e0e0',
+        zIndex: 50,
+        transform: isVisible ? 'translateY(0) scale(1)' : 'translateY(-8px) scale(0.95)',
+        opacity: isVisible ? 1 : 0,
+        transition: 'transform 150ms ease-out, opacity 150ms ease-out',
+        pointerEvents: isVisible ? 'auto' : 'none',
+      }}
     >
-        {/* Arrow for desktop (complex with pure Tailwind, often done with custom CSS or SVG) */}
-        <div className="hidden md:block absolute top-[-10px] right-[22px] w-0 h-0 border-l-[10px] border-l-transparent border-r-[10px] border-r-transparent border-b-[10px] border-b-white z-[1]"></div>
-        <div className="hidden md:block absolute top-[-11px] right-[21px] w-0 h-0 border-l-[11px] border-l-transparent border-r-[11px] border-r-transparent border-b-[11px] border-b-brand-gray-dark z-[0]"></div>
+      {/* Custom arrow pointing to bell icon */}
+      <div
+        style={{
+          position: 'absolute',
+          top: '-8px',
+          right: '35px', // Position arrow directly under bell
+          width: '16px',
+          height: '16px',
+          backgroundColor: 'white',
+          transform: 'rotate(45deg)',
+          borderTop: '1px solid #e0e0e0',
+          borderLeft: '1px solid #e0e0e0',
+          zIndex: 1,
+        }}
+      />
 
       <button
         onClick={onClose}
@@ -75,7 +86,7 @@ const NotificationOptInPopup = ({ isVisible, onClose, onSignUp, onAskLater }) =>
           </button>
         </div>
         <p className="text-xs text-brand-gray-textPlaceholder mt-4 mb-0 leading-normal">
-          By clicking “Sign me up” you consent to receive promotional messages. You can manage your preferences at any time.
+          By clicking "Sign me up" you consent to receive promotional messages. You can manage your preferences at any time.
         </p>
       </div>
     </div>

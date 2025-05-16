@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
+import NotificationOptInPopup from './NotificationOptInPopup'; // Make sure path is correct
 
-// --- SVG Icons (Consider moving to a dedicated Icons.jsx file) ---
+// --- SVG Icons ---
 const LogoIcon = () => <svg className="w-8 h-8 mr-2 stroke-brand-green fill-none" viewBox="0 0 32 32" strokeWidth="2"><circle cx="16" cy="16" r="14" /><path d="M8 16h16 M16 8c0 16 0 16 0 16" strokeLinejoin="round" strokeLinecap="round" /></svg>;
 const ClockIcon = () => <svg className="w-6 h-6" stroke="currentColor" fill="none" viewBox="0 0 24 24" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round"><circle cx="12" cy="12" r="10" /><path d="M12 6v6l4 2" /></svg>;
 const BellIconSvg = () => <svg className="w-6 h-6" stroke="currentColor" fill="none" viewBox="0 0 24 24" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 0 1-3.46 0" /></svg>;
@@ -8,15 +9,28 @@ const MoonIcon = () => <svg className="w-6 h-6" stroke="currentColor" fill="none
 const MenuIcon = () => <svg className="w-6 h-6" stroke="currentColor" fill="none" viewBox="0 0 24 24" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>;
 // --- End SVG Icons ---
 
-const Header = ({ userInitials, onLogout, onBellClick, hasUnreadNotification, onToggleMobileSidebar }) => {
+const Header = ({
+  userInitials,
+  onLogout,
+  onBellClick,
+  hasUnreadNotification,
+  onToggleMobileSidebar,
+  // Props for NotificationOptInPopup
+  isNotificationPopupVisible,
+  onNotificationClose,
+  onNotificationSignUp,
+  onNotificationAskLater
+}) => {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef(null);
+  const bellWrapperRef = useRef(null); // Using this ref for better alignment
 
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
         setDropdownOpen(false);
       }
+      // Note: NotificationOptInPopup has its own click-outside logic
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
@@ -34,25 +48,39 @@ const Header = ({ userInitials, onLogout, onBellClick, hasUnreadNotification, on
         </div>
       </div>
 
-      <div className="flex items-center gap-3 sm:gap-5">
-        <div className="hidden sm:flex items-center gap-4">
-          {[ClockIcon, MoonIcon].map((Icon, idx) => (
-            <button key={idx} className="text-brand-gray-textLight hover:text-brand-green transition-colors transform hover:-translate-y-px focus:outline-none">
-              <Icon />
-            </button>
-          ))}
-        </div>
-        <div className="relative">
-          <button
-            onClick={onBellClick}
-            className="text-brand-gray-textLight hover:text-brand-green transition-colors transform hover:-translate-y-px focus:outline-none relative"
-          >
-            <BellIconSvg />
-            {hasUnreadNotification && (
-              <span className="absolute top-[1px] right-[1px] block w-2 h-2 bg-notification-dot rounded-full border border-white pointer-events-none"></span>
-            )}
+      <div className="flex items-center pr-1">
+        {/* Icon toolbar with unified gray background */}
+        <div className="flex items-center bg-gray-50 rounded-lg px-1 mr-2">
+          <button className="flex items-center justify-center w-8 h-8 text-brand-gray-textLight hover:text-brand-green transition-colors">
+            <ClockIcon />
           </button>
+          
+          <button className="flex items-center justify-center w-8 h-8 text-brand-gray-textLight hover:text-brand-green transition-colors">
+            <MoonIcon />
+          </button>
+          
+          {/* Bell icon with notification popup */}
+          <div className="relative" ref={bellWrapperRef}>
+            <button
+              id="notificationBellIcon"
+              onClick={onBellClick}
+              className="flex items-center justify-center w-8 h-8 text-brand-gray-textLight hover:text-brand-green transition-colors relative"
+            >
+              <BellIconSvg />
+              {hasUnreadNotification && (
+                <span className="absolute top-0 right-0 block w-2.5 h-2.5 bg-notification-dot rounded-full border border-white pointer-events-none"></span>
+              )}
+            </button>
+            <NotificationOptInPopup
+              isVisible={isNotificationPopupVisible}
+              onClose={onNotificationClose}
+              onSignUp={onNotificationSignUp}
+              onAskLater={onNotificationAskLater}
+            />
+          </div>
         </div>
+        
+        {/* User initials button */}
         <div className="relative" ref={dropdownRef}>
           <button
             onClick={() => setDropdownOpen(!dropdownOpen)}

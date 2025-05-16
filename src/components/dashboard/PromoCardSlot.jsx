@@ -1,98 +1,108 @@
+// src/components/dashboard/PromoCardSlot.jsx
 import React, { useState, useEffect, useRef } from 'react';
 import PromoCard from './PromoCard';
 import SkeletonCard from './SkeletonCard';
-import BrazeService from '../../services/braze-service'; // Assuming BrazeService is correctly set up
+import BrazeService from '../../services/braze-service';
 
-const BRAZE_DATA_TIMEOUT_MS = 3000; // Wait 3 seconds for Braze
+const BRAZE_DATA_TIMEOUT_MS = 3000;
 
 const PromoCardSlot = ({ slotTargetKey, defaultCardData, brazeCards, brazeInitialized, htmlElementId }) => {
-  const [status, setStatus] = useState('loading'); // 'loading', 'braze', 'default', 'empty'
+  const [status, setStatus] = useState('loading');
   const [cardData, setCardData] = useState(null);
-  const timeoutRef = useRef(null);
+  const dataFetchTimeoutRef = useRef(null);
   const hasLoggedImpressionRef = useRef(false);
 
   useEffect(() => {
-    setStatus('loading'); // Reset on prop changes
+    setStatus('loading'); // Always start as loading
     setCardData(null);
-    hasLoggedImpressionRef.current = false; // Reset impression log status
-    
-    if (timeoutRef.current) {
-      clearTimeout(timeoutRef.current);
-    }
+    hasLoggedImpressionRef.current = false;
+
+    if (dataFetchTimeoutRef.current) clearTimeout(dataFetchTimeoutRef.current);
 
     if (!brazeInitialized) {
-      // If Braze isn't initialized, use default data immediately.
-      console.log(`Slot ${slotTargetKey} (${htmlElementId}): Braze not initialized. Falling back to default.`);
-      setCardData(defaultCardData);
-      setStatus(defaultCardData ? 'default' : 'empty');
-      return;
+      console.log(`Slot ${slotTargetKey} (${htmlElementId}): Braze not initialized. Setting to default/empty after a brief loading state for skeleton.`);
+      // Minimal delay to ensure 'loading' status is rendered once before switching
+      // This helps if the skeleton itself needs a frame to appear correctly,
+      // otherwise, if state changes too fast, it might not render.
+      const timer = setTimeout(() => {
+        setCardData(defaultCardData);
+        setStatus(defaultCardData ? 'default' : 'empty');
+      }, 50); // A very short delay
+      return () => clearTimeout(timer);
     }
 
-    // Braze is initialized (or initialization was attempted)
-    const brazeCardForThisSlot = (brazeCards || []).find(
+    console.log(`Slot ${slotTargetKey} (${htmlElementId}): Braze IS initialized. Looking for card.`);
+    const cardFromProps = (brazeCards || []).find(
       bc => bc.extras?.slot_target === slotTargetKey
     );
 
-    if (brazeCardForThisSlot) {
-      console.log(`Slot ${slotTargetKey} (${htmlElementId}): Found Braze card ID: ${brazeCardForThisSlot.id}`);
-      setCardData(brazeCardForThisSlot);
+    if (cardFromProps) {
+      console.log(`Slot ${slotTargetKey} (${htmlElementId}): Found Braze card ID: ${cardFromProps.id} from props.`);
+      setCardData(cardFromProps);
       setStatus('braze');
     } else {
-      // No immediate Braze card from the passed 'brazeCards' prop, set timeout for default
-      // This happens if brazeCards is initially empty or doesn't contain the card for this slot
-      console.log(`Slot ${slotTargetKey} (${htmlElementId}): No Braze card in current props. Starting timeout for default.`);
-      timeoutRef.current = setTimeout(() => {
-        // After timeout, check *again* if a Braze card became available (e.g., from a fresh fetch)
-        // This relies on braze.getCachedContentCards being up-to-date if an update happened.
-        const latestBrazeCards = BrazeService.isInitialized && window.braze && typeof window.braze.getCachedContentCards === 'function'
-                                ? window.braze.getCachedContentCards().cards || []
-                                : [];
-        const currentBrazeCard = latestBrazeCards.find(bc => bc.extras?.slot_target === slotTargetKey);
+      console.log(`Slot ${slotTargetKey} (${htmlElementId}): No Braze card in props. Starting ${BRAZE_DATA_TIMEOUT_MS}ms timeout to check cache.`);
+      // setStatus('loading'); // Already loading from start of effect
+      dataFetchTimeoutRef.current = setTimeout(() => {
+        console.log(`Slot ${slotTargetKey} (${htmlElementId}): Timeout reached. Checking Braze cache.`);
+        const cachedCards = BrazeService.getCachedContentCards();
+        const cardFromCache = (cachedCards.cards || []).find(bc => bc.extras?.slot_target === slotTargetKey);
 
-        if (currentBrazeCard) {
-            console.log(`Slot ${slotTargetKey} (${htmlElementId}): Braze card arrived during/after timeout. Using Braze card ID: ${currentBrazeCard.id}`);
-            setCardData(currentBrazeCard);
+        if (cardFromCache) {
+            console.log(`Slot ${slotTargetKey} (${htmlElementId}): Braze card ID: ${cardFromCache.id} found in cache.`);
+            setCardData(cardFromCache);
             setStatus('braze');
         } else {
-            console.log(`Slot ${slotTargetKey} (${htmlElementId}): Timeout reached. No Braze card. Using default card.`);
+            console.log(`Slot ${slotTargetKey} (${htmlElementId}): No Braze card in cache. Using default card.`);
             setCardData(defaultCardData);
             setStatus(defaultCardData ? 'default' : 'empty');
         }
       }, BRAZE_DATA_TIMEOUT_MS);
     }
     
-    return () => { // Cleanup
-        if (timeoutRef.current) {
-            clearTimeout(timeoutRef.current);
-        }
+    return () => {
+        if (dataFetchTimeoutRef.current) clearTimeout(dataFetchTimeoutRef.current);
     };
 
   }, [slotTargetKey, defaultCardData, brazeCards, brazeInitialized, htmlElementId]);
 
-  // Effect for logging impression when Braze card is shown
   useEffect(() => {
     if (status === 'braze' && cardData && !hasLoggedImpressionRef.current) {
-      if (window.braze && typeof window.braze.logContentCardImpression === 'function') {
-        window.braze.logContentCardImpression(cardData); // Pass the actual card object
-        console.log(`Logged impression for Braze card ${cardData.id} in slot ${slotTargetKey}`);
-        hasLoggedImpressionRef.current = true;
-      }
+      BrazeService.logContentCardImpression(cardData);
+      hasLoggedImpressionRef.current = true;
     }
-  }, [status, cardData, slotTargetKey]);
-
+  }, [status, cardData]);
 
   let slotClass = 'braze-content-card-slot';
-  if (status === 'braze') slotClass += ' populated';
-  else if (status === 'default') slotClass += ' default-populated';
+  // If loading, or populated with Braze/default card, treat as "populated" to remove default styles
+  if (status === 'loading' || (status === 'braze' && cardData) || (status === 'default' && cardData)) {
+    slotClass += ' populated'; // Use 'populated' to get the clean slate style for the wrapper
+  }
+  // If it's truly empty (no default card and Braze failed or had no card), it will use the default .braze-content-card-slot styles.
+  // Or, if you never want the dotted border even for an empty slot after loading:
+  // if (status !== 'empty-and-show-dotted-border') { // hypothetical state
+  //   slotClass += ' populated';
+  // }
+
 
   return (
+    // The `htmlElementId` is for Braze to target, the styling is handled by slotClass
     <div id={htmlElementId} className={slotClass}>
       {status === 'loading' && <SkeletonCard />}
       {status === 'braze' && cardData && <PromoCard card={cardData} isBrazeSourced={true} />}
       {status === 'default' && cardData && <PromoCard card={cardData} isBrazeSourced={false} />}
+      
+      {/* Fallback for when no card is available AND status is 'empty' 
+          This part ensures the slot doesn't collapse if it's truly empty after all checks.
+          The SkeletonCard and PromoCard define their own heights.
+          If this slot is truly empty (no default, no Braze card), and you don't want the dotted border,
+          the slotClass logic above should already handle it by applying 'populated'.
+          If you *do* want a specific empty state different from Skeleton/PromoCard:
+      */}
       {status === 'empty' && (
-        <div className="flex items-center justify-center h-full text-sm text-gray-400">
-          {/* Optional: "No promotion available." */}
+        <div className="flex items-center justify-center h-[420px] w-full text-sm text-gray-400 p-4 rounded-xl bg-gray-50">
+           {/* This could be an alternative placeholder if you want it different from the dotted one */}
+           {/* e.g., "No promotion available." */}
         </div>
       )}
     </div>
